@@ -1,1 +1,983 @@
-placeholder
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Project Registry</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+--bg:#f4f5f7;
+--card:#ffffff;
+--border:#e2e4e8;
+--text:#1f2430;
+--text-soft:#5b6271;
+--text-faint:#8b909c;
+--gray:#6b7280;
+--amber:#b45309;
+--amber-bg:#fef3c7;
+--green:#047857;
+--green-bg:#d1fae5;
+--red:#b91c1c;
+--red-bg:#fee2e2;
+--radius:12px;
+}
+*{box-sizing:border-box;}
+body{
+margin:0;
+font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+background:var(--bg);
+color:var(--text);
+font-size:16px;
+line-height:1.6;
+}
+#app{max-width:1180px;margin:0 auto;padding:24px 20px 80px;}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;}
+header.top h1{font-size:24px;font-weight:600;margin:0 0 4px;}
+header.top p.sub{margin:0;color:var(--text-soft);font-size:14px;}
+.actions{display:flex;gap:8px;flex-wrap:wrap;}
+button{
+font-family:inherit;font-size:14px;cursor:pointer;border-radius:8px;
+border:1px solid var(--border);background:var(--card);padding:9px 14px;
+color:var(--text);font-weight:500;
+}
+button:hover{background:#f0f1f3;}
+button:disabled{opacity:.6;cursor:default;}
+button.primary{background:#2563eb;border-color:#2563eb;color:#fff;}
+button.primary:hover{background:#1d4ed8;}
+button.danger{background:var(--red-bg);border-color:#fca5a5;color:var(--red);}
+button.ghost{background:transparent;border-color:transparent;padding:6px 10px;font-size:13px;color:var(--text-soft);}
+.back-link{background:transparent;border:none;padding:0;margin-bottom:10px;color:#2563eb;font-weight:600;font-size:14px;}
+.back-link:hover{background:transparent;text-decoration:underline;}
+
+.overview-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px;}
+.overview-top{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;}
+.overview-pct{font-size:30px;font-weight:700;}
+.overview-label{font-size:14px;color:var(--text-soft);}
+.overview-bar-track{height:12px;background:#e8e9ec;border-radius:6px;overflow:hidden;}
+.overview-bar-fill{height:100%;background:#2563eb;border-radius:6px;transition:width .2s;}
+.overview-sub{margin:8px 0 0;font-size:13px;color:var(--text-soft);}
+
+.project-list{display:flex;flex-direction:column;gap:10px;}
+.project-row{
+display:grid;grid-template-columns:200px 1fr 50px 170px 56px;align-items:center;gap:14px;
+background:var(--card);border:1px solid var(--border);border-left:4px solid var(--gray);
+border-radius:var(--radius);padding:14px 16px;cursor:pointer;
+}
+.project-row:hover{border-color:#c7cad1;}
+.project-row.overdue{border-left-color:var(--red);}
+.project-row.soon{border-left-color:var(--amber);}
+.project-row.done{border-left-color:var(--green);}
+@media (max-width:760px){
+.project-row{grid-template-columns:1fr;grid-template-areas:"name" "bar" "pct" "status" "edit";}
+}
+.proj-name-col{display:flex;align-items:center;gap:8px;min-width:0;}
+.proj-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.proj-name{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-track{height:9px;background:#e8e9ec;border-radius:5px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:5px;}
+.proj-pct-col{font-size:13px;font-weight:600;text-align:right;color:var(--text-soft);}
+.proj-status-col{font-size:13px;font-weight:600;text-align:right;color:var(--text-faint);}
+.proj-status-col.overdue{color:var(--red);}
+.proj-status-col.soon{color:var(--amber);}
+.proj-status-col.done{color:var(--green);}
+
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.chip{
+display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;
+padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--border);
+}
+.chip.overdue{color:var(--red);background:var(--red-bg);border-color:#fca5a5;}
+.chip.soon{color:var(--amber);background:var(--amber-bg);border-color:#fcd34d;}
+.chip.done{color:var(--green);background:var(--green-bg);border-color:#6ee7b7;}
+
+.help{font-size:13px;color:var(--text-faint);margin:0 0 20px;}
+
+.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+@media (max-width:820px){.board{grid-template-columns:1fr;}}
+.col-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;font-weight:600;color:var(--text-soft);}
+.col-head .count{font-weight:500;color:var(--text-faint);}
+.col-body.dragover{outline:2px dashed #93c5fd;border-radius:var(--radius);}
+
+.card{
+background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+padding:12px 14px;margin-bottom:10px;cursor:pointer;border-left:4px solid var(--gray);
+}
+.card:hover{border-color:#c7cad1;}
+.card.overdue{border-left-color:var(--red);}
+.card.soon{border-left-color:var(--amber);}
+.card.done{border-left-color:var(--green);}
+.card .title{font-size:14px;font-weight:600;margin:0 0 4px;}
+.card .snippet{
+font-size:12px;color:var(--text-soft);margin:0 0 8px;line-height:1.4;
+display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.card .meta{font-size:12px;color:var(--text-soft);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.card .meta.warn{color:var(--red);font-weight:600;}
+.card .meta.amberwarn{color:var(--amber);font-weight:600;}
+.progress-row{display:flex;gap:4px;}
+.seg{flex:1;height:7px;border-radius:4px;background:#e8e9ec;}
+.seg.filled{background:#2563eb;}
+.card.done .seg.filled{background:var(--green);}
+.card.overdue .seg.filled{background:var(--red);}
+
+.empty-col{font-size:13px;color:var(--text-faint);padding:14px;border:1px dashed var(--border);border-radius:var(--radius);text-align:center;}
+
+.overlay{
+position:fixed;inset:0;background:rgba(20,22,28,0.45);display:flex;align-items:flex-start;
+justify-content:center;padding:40px 16px;overflow-y:auto;z-index:50;
+}
+.modal{background:var(--card);border-radius:16px;max-width:540px;width:100%;padding:24px 26px 26px;}
+.modal h2{font-size:18px;margin:0 0 16px;font-weight:600;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--text-soft);margin-bottom:5px;}
+.field input[type=text],.field input[type=email],.field input[type=password],.field input[type=date],.field input[type=time],.field select,.field textarea{
+width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);font-family:inherit;
+font-size:14px;background:#fbfbfc;
+}
+.field textarea{min-height:56px;resize:vertical;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field.checkrow{display:flex;align-items:center;gap:8px;}
+.field.checkrow input{width:auto;}
+.progress-pick{display:flex;gap:8px;}
+.progress-pick button{flex:1;padding:8px 0;}
+.progress-pick button.active{background:#2563eb;color:#fff;border-color:#2563eb;}
+.modal-actions{display:flex;justify-content:space-between;margin-top:18px;align-items:center;}
+.modal-actions .right{display:flex;gap:8px;}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+
+.auth-card{max-width:380px;margin:80px auto;padding:28px;background:var(--card);border:1px solid var(--border);border-radius:16px;}
+.auth-card h1{font-size:20px;margin:0 0 4px;}
+.auth-card .sub{margin:0 0 18px;color:var(--text-soft);font-size:14px;}
+.auth-error{color:var(--red);font-size:13px;margin:0 0 12px;background:var(--red-bg);padding:8px 10px;border-radius:8px;}
+.auth-switch{font-size:13px;color:var(--text-soft);margin-top:14px;text-align:center;}
+.auth-switch a{color:#2563eb;cursor:pointer;text-decoration:none;font-weight:600;}
+.setup-card{max-width:480px;margin:80px auto;padding:28px;background:var(--card);border:1px solid var(--border);border-radius:16px;text-align:center;}
+.setup-card pre{font-size:13px;text-align:left;background:#f4f5f7;padding:12px;border-radius:8px;white-space:pre-wrap;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const SUPABASE_URL = 'https://qaxlumoemcufbjywlmfl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_OGqED17zsbgAeGlwJ_h28Q_FTs34IAP';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const PALETTE = ['#2563eb','#0d9488','#db2777','#d97706','#7c3aed','#059669','#dc2626'];
+
+const GCAL_CLIENT_ID = '20029415882-bfpa5iqqovvrq592trabfchlrl3ciluv.apps.googleusercontent.com';
+const GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+let gToken = null;
+let gTokenExpiry = 0;
+
+let state = { projects: [], items: [] };
+let currentView = 'dashboard';
+let selectedProjectId = null;
+let editingItemId = null;
+let editingProjectId = null;
+let authMode = 'signin';
+let authError = '';
+let currentUserEmail = '';
+
+function todayISO(){
+const d = new Date();
+return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function daysBetween(a,b){
+const da = new Date(a+'T00:00:00');
+const db = new Date(b+'T00:00:00');
+return Math.round((db-da)/86400000);
+}
+function fmtDate(iso){
+if(!iso) return '';
+const d = new Date(iso+'T00:00:00');
+return d.toLocaleDateString('en-US',{month:'short', day:'numeric'});
+}
+function escapeHtml(s){
+return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function dateOrNull(v){ return v ? v : null; }
+
+function mapProjectFromDb(row){
+return {
+id: row.id, name: row.name||'', objective: row.objective||'', leader: row.leader||'',
+team: row.team||'', start: row.start_date||'', delivery: row.delivery_date||'', color: row.color||PALETTE[0]
+};
+}
+function mapItemFromDb(row){
+return {
+id: row.id, projectId: row.project_id, title: row.title||'', description: row.description||'',
+objective: row.objective||'', leader: row.leader||'', team: row.team||'', time: row.time||'',
+calendarEventId: row.calendar_event_id||null, calendarLink: row.calendar_link||null,
+estTime: row.est_time||'', start: row.start_date||'', delivery: row.delivery_date||'',
+end: row.end_date||'', progress: row.progress||0, comments: row.comments||''
+};
+}
+function projectToDbRow(data){
+return {
+name: data.name, objective: data.objective, leader: data.leader, team: data.team,
+start_date: dateOrNull(data.start), delivery_date: dateOrNull(data.delivery), color: data.color
+};
+}
+function itemToDbRow(data){
+return {
+project_id: data.projectId, title: data.title, description: data.description, objective: data.objective,
+leader: data.leader, team: data.team, time: data.time || null,
+calendar_event_id: data.calendarEventId, calendar_link: data.calendarLink, est_time: data.estTime,
+start_date: dateOrNull(data.start), delivery_date: dateOrNull(data.delivery), end_date: dateOrNull(data.end),
+progress: data.progress, comments: data.comments
+};
+}
+
+function renderAuthScreen(){
+const isSignup = authMode === 'signup';
+document.getElementById('app').innerHTML = `
+<div class="auth-card">
+<h1>Project registry</h1>
+<p class="sub">${isSignup ? 'Create your account' : 'Sign in to your projects'}</p>
+${authError ? '<p class="auth-error">'+escapeHtml(authError)+'</p>' : ''}
+<form onsubmit="event.preventDefault(); submitAuth();">
+<div class="field"><label>Email</label><input type="email" id="auth-email" autocomplete="username"></div>
+<div class="field"><label>Password</label><input type="password" id="auth-password" autocomplete="${isSignup?'new-password':'current-password'}"></div>
+<button type="submit" class="primary" id="auth-submit-btn" style="width:100%;">${isSignup ? 'Sign up' : 'Sign in'}</button>
+</form>
+<p class="auth-switch">
+${isSignup ? 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>' : "Don't have an account yet? <a onclick=\"toggleAuthMode()\">Sign up</a>"}
+</p>
+</div>`;
+}
+
+function toggleAuthMode(){
+authMode = authMode === 'signin' ? 'signup' : 'signin';
+authError = '';
+renderAuthScreen();
+}
+
+async function submitAuth(){
+const email = document.getElementById('auth-email').value.trim();
+const password = document.getElementById('auth-password').value;
+if(!email || !password){ authError = 'Enter both email and password.'; renderAuthScreen(); return; }
+const btn = document.getElementById('auth-submit-btn');
+if(btn){ btn.disabled = true; btn.textContent = authMode==='signup' ? 'Creating account...' : 'Signing in...'; }
+try{
+if(authMode === 'signup'){
+const { data, error } = await sb.auth.signUp({ email, password });
+if(error) throw error;
+if(data.user && !data.session){
+document.getElementById('app').innerHTML = `
+<div class="auth-card" style="text-align:center;">
+<h1>Check your email</h1>
+<p class="sub">We sent a confirmation link to ${escapeHtml(email)}. Click it, then come back and sign in.</p>
+<button class="primary" style="margin-top:10px;width:100%;" onclick="authMode='signin'; authError=''; renderAuthScreen();">Back to sign in</button>
+</div>`;
+return;
+}
+} else {
+const { error } = await sb.auth.signInWithPassword({ email, password });
+if(error) throw error;
+}
+authError = '';
+await onAuthReady();
+}catch(e){
+authError = e.message || 'Something went wrong. Try again.';
+renderAuthScreen();
+}
+}
+
+async function signOut(){
+await sb.auth.signOut();
+state = { projects: [], items: [] };
+currentView = 'dashboard';
+selectedProjectId = null;
+authMode = 'signin';
+authError = '';
+renderAuthScreen();
+}
+
+async function onAuthReady(){
+const { data: { session } } = await sb.auth.getSession();
+currentUserEmail = session && session.user ? session.user.email : '';
+document.getElementById('app').innerHTML = '<p style="text-align:center;margin-top:80px;color:var(--text-soft);">Loading your projects...</p>';
+const ok = await loadData();
+if(ok) render();
+}
+
+async function loadData(){
+const [{ data: projects, error: pErr }, { data: items, error: iErr }] = await Promise.all([
+sb.from('projects').select('*').order('created_at'),
+sb.from('items').select('*').order('created_at')
+]);
+if(pErr || iErr){
+document.getElementById('app').innerHTML = '<div class="auth-card" style="text-align:center;"><h1>Could not load your data</h1><p class="sub">'+escapeHtml((pErr&&pErr.message)||(iErr&&iErr.message)||'Unknown error')+'</p><button class="primary" style="width:100%;margin-top:10px;" onclick="onAuthReady()">Try again</button></div>';
+return false;
+}
+state.projects = projects.map(mapProjectFromDb);
+state.items = items.map(mapItemFromDb);
+return true;
+}
+
+async function init(){
+const { data: { session } } = await sb.auth.getSession();
+if(session){
+await onAuthReady();
+} else {
+renderAuthScreen();
+}
+sb.auth.onAuthStateChange((event)=>{
+if(event === 'SIGNED_OUT'){
+state = { projects: [], items: [] };
+currentView = 'dashboard';
+selectedProjectId = null;
+authMode = 'signin';
+renderAuthScreen();
+}
+});
+}
+
+function itemStatus(item){
+if(item.progress >= 100) return 'done';
+if(item.progress <= 0) return 'not-started';
+return 'in-progress';
+}
+function itemUrgency(item){
+if(itemStatus(item)==='done') return 'normal';
+if(!item.delivery) return 'normal';
+const diff = daysBetween(todayISO(), item.delivery);
+if(diff < 0) return 'overdue';
+if(diff <= 3) return 'soon';
+return 'normal';
+}
+function projectById(id){ return state.projects.find(p=>p.id===id); }
+function projectItems(projectId){ return state.items.filter(i=>i.projectId===projectId); }
+
+function projectCompletion(projectId){
+const items = projectItems(projectId);
+if(items.length===0) return 0;
+const total = items.reduce((s,i)=>s+i.progress,0);
+return Math.round(total/items.length);
+}
+
+function projectUrgency(project){
+const rank = {overdue:0, soon:1, normal:2};
+let worst = 'normal';
+let worstDate = null;
+const candidates = [];
+if(project.delivery) candidates.push({date:project.delivery, done:projectCompletion(project.id)>=100});
+projectItems(project.id).forEach(it=>{
+if(it.delivery) candidates.push({date:it.delivery, done: it.progress>=100});
+});
+candidates.forEach(c=>{
+if(c.done) return;
+const diff = daysBetween(todayISO(), c.date);
+const u = diff<0 ? 'overdue' : (diff<=3 ? 'soon' : 'normal');
+if(rank[u] < rank[worst] || (rank[u]===rank[worst] && (!worstDate || c.date < worstDate))){
+worst = u; worstDate = c.date;
+}
+});
+return {urgency: worst, date: worstDate};
+}
+
+function sortedProjectRows(){
+return state.projects.map(p=>{
+const completion = projectCompletion(p.id);
+const u = projectUrgency(p);
+const done = completion >= 100;
+return {project:p, completion, urgency:u.urgency, date:u.date, done};
+}).sort((a,b)=>{
+if(a.done !== b.done) return a.done ? 1 : -1;
+const rank = {overdue:0, soon:1, normal:2};
+if(rank[a.urgency] !== rank[b.urgency]) return rank[a.urgency]-rank[b.urgency];
+const da = a.date || '9999-99-99';
+const db = b.date || '9999-99-99';
+return da.localeCompare(db);
+});
+}
+
+function overallStats(){
+const totalItems = state.items.length;
+const sumProgress = state.items.reduce((s,i)=>s+i.progress,0);
+const overallPct = totalItems ? Math.round(sumProgress/totalItems) : 0;
+const doneProjects = state.projects.filter(p=>projectCompletion(p.id)>=100).length;
+return {overallPct, doneProjects, totalProjects: state.projects.length};
+}
+
+function sortItemsByUrgency(items){
+const rank = {overdue:0, soon:1, normal:2};
+return items.slice().sort((a,b)=>{
+const ra = rank[itemUrgency(a)], rb = rank[itemUrgency(b)];
+if(ra!==rb) return ra-rb;
+const da = a.delivery || '9999-99-99';
+const db = b.delivery || '9999-99-99';
+return da.localeCompare(db);
+});
+}
+
+function render(){
+if(currentView === 'board' && selectedProjectId) renderBoard();
+else renderDashboard();
+}
+
+function accountControlsHtml(){
+return '<button onclick="toggleGoogleConnection()">'+(gToken?'Google Calendar &#10003;':'Connect Google Calendar')+'</button>'
++ '<button class="ghost" title="'+escapeHtml(currentUserEmail)+'" onclick="signOut()">Sign out</button>';
+}
+
+function renderDashboard(){
+currentView = 'dashboard';
+const stats = overallStats();
+const rows = sortedProjectRows();
+
+let html = '';
+html += '<h1 class="sr-only">Project dashboard, one row per project, overdue projects pinned to the top</h1>';
+html += '<header class="top">';
+html += '<div><h1>Project registry</h1><p class="sub">One line per project. Click a project to see its activities.</p></div>';
+html += '<div class="actions"><button class="primary" onclick="openProjectModal()">+ New project</button><button onclick="exportCsv()">Export CSV</button>'+accountControlsHtml()+'</div>';
+html += '</header>';
+
+html += '<div class="overview-card">';
+html += '<div class="overview-top"><span class="overview-pct">'+stats.overallPct+'%</span><span class="overview-label">complete overall</span></div>';
+html += '<div class="overview-bar-track"><div class="overview-bar-fill" style="width:'+stats.overallPct+'%;"></div></div>';
+html += '<p class="overview-sub">'+stats.doneProjects+' of '+stats.totalProjects+' projects done</p>';
+html += '</div>';
+
+if(rows.length===0){
+html += '<div class="empty-col">No projects yet. Click "+ New project" to add your first one.</div>';
+} else {
+html += '<div class="project-list">';
+rows.forEach(r=>{
+const p = r.project;
+let statusText, statusClass;
+if(r.done){ statusText='Done'; statusClass='done'; }
+else if(r.urgency==='overdue'){ const d=Math.abs(daysBetween(todayISO(), r.date)); statusText='Overdue by '+d+' day'+(d===1?'':'s'); statusClass='overdue'; }
+else if(r.urgency==='soon'){ const d=daysBetween(todayISO(), r.date); statusText='Due in '+d+' day'+(d===1?'':'s'); statusClass='soon'; }
+else if(r.date){ statusText='Due '+fmtDate(r.date); statusClass='normal'; }
+else { statusText='Not started'; statusClass='normal'; }
+
+html += '<div class="project-row '+statusClass+'" onclick="goToProject(\''+p.id+'\')">';
+html += '<div class="proj-name-col"><span class="proj-dot" style="background:'+p.color+';"></span><span class="proj-name">'+escapeHtml(p.name)+'</span></div>';
+html += '<div class="bar-track"><div class="bar-fill" style="width:'+r.completion+'%; background:'+p.color+';"></div></div>';
+html += '<div class="proj-pct-col">'+r.completion+'%</div>';
+html += '<div class="proj-status-col '+statusClass+'">'+statusText+'</div>';
+html += '<button class="ghost" onclick="event.stopPropagation(); openProjectModal(\''+p.id+'\')">Edit</button>';
+html += '</div>';
+});
+html += '</div>';
+}
+document.getElementById('app').innerHTML = html;
+}
+
+function renderBoard(){
+const project = projectById(selectedProjectId);
+if(!project){ currentView='dashboard'; selectedProjectId=null; renderDashboard(); return; }
+
+const items = projectItems(project.id);
+const overdueCount = items.filter(i=>itemUrgency(i)==='overdue').length;
+const soonCount = items.filter(i=>itemUrgency(i)==='soon').length;
+const doneCount = items.filter(i=>itemStatus(i)==='done').length;
+
+const cols = [
+{key:'not-started', label:'Not started'},
+{key:'in-progress', label:'In progress'},
+{key:'done', label:'Done'}
+];
+
+let html = '';
+html += '<button class="back-link" onclick="goToDashboard()">&lsaquo; All projects</button>';
+html += '<header class="top">';
+html += '<div><h1>'+escapeHtml(project.name)+'</h1><p class="sub">'+escapeHtml(project.objective||'')+'</p></div>';
+html += '<div class="actions"><button onclick="openProjectModal(\''+project.id+'\')">Edit project</button><button class="primary" onclick="openItemModal()">+ New activity</button>'+accountControlsHtml()+'</div>';
+html += '</header>';
+
+html += '<div class="summary">';
+html += '<div class="chip overdue">'+overdueCount+' overdue</div>';
+html += '<div class="chip soon">'+soonCount+' due soon</div>';
+html += '<div class="chip done">'+doneCount+' / '+items.length+' done</div>';
+html += '</div>';
+
+html += '<div class="board">';
+cols.forEach(col=>{
+const colItems = sortItemsByUrgency(items.filter(i=>itemStatus(i)===col.key));
+html += '<div class="col">';
+html += '<div class="col-head">'+col.label+' <span class="count">('+colItems.length+')</span></div>';
+html += '<div class="col-body" ondragover="event.preventDefault()" ondrop="onDrop(event,\''+col.key+'\')">';
+if(colItems.length===0){
+html += '<div class="empty-col">Nothing here</div>';
+} else {
+colItems.forEach(item=>{
+const urg = itemUrgency(item);
+const cardClasses = ['card', itemStatus(item), urg];
+let metaLine;
+if(urg==='overdue'){
+const d = Math.abs(daysBetween(todayISO(), item.delivery));
+metaLine = '<div class="meta warn">Overdue by '+d+' day'+(d===1?'':'s')+'</div>';
+} else if(urg==='soon'){
+const d = daysBetween(todayISO(), item.delivery);
+metaLine = '<div class="meta amberwarn">Due in '+d+' day'+(d===1?'':'s')+'</div>';
+} else if(item.delivery){
+metaLine = '<div class="meta">Due '+fmtDate(item.delivery)+'</div>';
+} else {
+metaLine = '<div class="meta">No date set</div>';
+}
+const who = [item.leader, item.team].filter(Boolean).join(', ');
+const seg = [0,1,2,3].map(n=>'<div class="seg '+(item.progress >= (n+1)*25 ? 'filled':'')+'" onclick="event.stopPropagation(); setProgress(\''+item.id+'\','+((n+1)*25)+')"></div>').join('');
+html += '<div class="'+cardClasses.join(' ')+'" draggable="true" ondragstart="onDragStart(event,\''+item.id+'\')" onclick="openItemModal(\''+item.id+'\')">';
+html += '<p class="title">'+escapeHtml(item.title)+'</p>';
+if(item.description) html += '<p class="snippet">'+escapeHtml(item.description)+'</p>';
+if(who) html += '<div class="meta">'+escapeHtml(who)+'</div>';
+if(item.calendarEventId) html += '<div class="meta" style="color:var(--green);">&#10003; On calendar'+(item.time?' &middot; '+item.time:'')+'</div>';
+html += metaLine;
+html += '<div class="progress-row">'+seg+'</div>';
+html += '</div>';
+});
+}
+html += '</div></div>';
+});
+html += '</div>';
+
+document.getElementById('app').innerHTML = html;
+}
+
+function goToProject(id){ selectedProjectId = id; currentView = 'board'; render(); }
+function goToDashboard(){ currentView = 'dashboard'; selectedProjectId = null; render(); }
+
+async function setProgress(itemId, value){
+const item = state.items.find(i=>i.id===itemId);
+if(!item) return;
+const newProgress = Math.max(0, (item.progress === value) ? value - 25 : value);
+const prev = item.progress;
+item.progress = newProgress;
+render();
+const { error } = await sb.from('items').update({progress:newProgress}).eq('id', itemId);
+if(error){ item.progress = prev; render(); alert('Could not save progress change: '+error.message); }
+}
+
+let draggedId = null;
+function onDragStart(e, id){ draggedId = id; }
+async function onDrop(e, colKey){
+e.preventDefault();
+const item = state.items.find(i=>i.id===draggedId);
+if(!item) return;
+const prev = item.progress;
+let newProgress = item.progress;
+if(colKey==='not-started') newProgress = 0;
+if(colKey==='in-progress') newProgress = item.progress<=0 ? 50 : (item.progress>=100?75:item.progress);
+if(colKey==='done') newProgress = 100;
+item.progress = newProgress;
+render();
+const { error } = await sb.from('items').update({progress:newProgress}).eq('id', item.id);
+if(error){ item.progress = prev; render(); alert('Could not save: '+error.message); }
+}
+
+function getTokenClient(){
+if(!window._gTokenClient){
+window._gTokenClient = google.accounts.oauth2.initTokenClient({
+client_id: GCAL_CLIENT_ID,
+scope: GCAL_SCOPES,
+callback: (resp)=>{
+if(resp.error){
+alert('Google sign-in did not complete: '+resp.error);
+return;
+}
+gToken = resp.access_token;
+gTokenExpiry = Date.now() + (resp.expires_in*1000);
+const cb = window._tokenCallback;
+window._tokenCallback = null;
+if(cb) cb();
+if(currentView==='dashboard' || currentView==='board') render();
+}
+});
+}
+return window._gTokenClient;
+}
+
+function ensureGoogleToken(cb){
+if(location.protocol === 'file:'){
+alert('Google Calendar sign-in needs this page to be served from a web address, not opened as a file.');
+return;
+}
+if(typeof google === 'undefined' || !google.accounts){
+alert('Google sign-in is still loading. Wait a second and try again.');
+return;
+}
+if(gToken && Date.now() < gTokenExpiry - 30000){ cb(); return; }
+window._tokenCallback = cb;
+getTokenClient().requestAccessToken();
+}
+
+function toggleGoogleConnection(){
+if(location.protocol === 'file:'){
+ensureGoogleToken(()=>{});
+return;
+}
+if(gToken){
+if(confirm('Disconnect Google Calendar? You can reconnect anytime.')){
+gToken = null; gTokenExpiry = 0;
+render();
+}
+} else {
+ensureGoogleToken(()=>render());
+}
+}
+
+function plusOneHourDateTime(dateISO, timeStr){
+const d = new Date(dateISO+'T'+timeStr+':00');
+d.setHours(d.getHours()+1);
+const pad = n=>String(n).padStart(2,'0');
+return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())+':00';
+}
+
+function gcalSectionHtml(item){
+const hasEvent = !!(item && item.calendarEventId);
+return '<div class="field" id="gcal-status-block">'
++ '<label>Google Calendar</label>'
++ '<div class="row2">'
++ '<input type="time" id="f-time" value="'+(item&&item.time||'')+'">'
++ '<button type="button" onclick="viewDaySchedule()">View my day</button>'
++ '</div>'
++ '<div id="g-day-events" style="margin-top:8px;font-size:13px;color:var(--text-soft);"></div>'
++ '<div style="margin-top:10px;">'
++ (hasEvent
+? '<span style="color:var(--green);font-weight:600;font-size:13px;">&#10003; On Google Calendar</span> &nbsp;<a href="'+(item.calendarLink||'#')+'" target="_blank" style="font-size:13px;">Open</a> &nbsp;<button type="button" class="ghost" onclick="removeFromCalendar()">Remove</button>'
+: '<button type="button" class="primary" id="btn-add-gcal" onclick="addToGoogleCalendar()">Add to Google Calendar</button>')
++ '</div>'
++ '</div>';
+}
+
+function refreshGcalBlock(){
+const existingItem = editingItemId ? state.items.find(i=>i.id===editingItemId) : null;
+const timeEl = document.getElementById('f-time');
+const itemLike = {
+time: timeEl ? timeEl.value : '',
+calendarEventId: window._pendingCalendarEvent ? window._pendingCalendarEvent.id : (existingItem && existingItem.calendarEventId),
+calendarLink: window._pendingCalendarEvent ? window._pendingCalendarEvent.link : (existingItem && existingItem.calendarLink)
+};
+const block = document.getElementById('gcal-status-block');
+if(block) block.outerHTML = gcalSectionHtml(itemLike);
+}
+
+function viewDaySchedule(){
+const date = document.getElementById('f-start').value || document.getElementById('f-delivery').value;
+const box = document.getElementById('g-day-events');
+if(!date){ box.innerHTML = '<em>Set a start or due date first.</em>'; return; }
+box.innerHTML = 'Loading your schedule for '+fmtDate(date)+'...';
+ensureGoogleToken(()=>{
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const params = new URLSearchParams({timeMin: date+'T00:00:00', timeMax: date+'T23:59:59', timeZone: tz, singleEvents:'true', orderBy:'startTime'});
+fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?'+params.toString(), {
+headers:{ 'Authorization':'Bearer '+gToken }
+}).then(r=>r.json()).then(data=>{
+const events = data.items || [];
+if(events.length===0){ box.innerHTML = '<em>Nothing on your calendar for '+fmtDate(date)+'. Looks open.</em>'; return; }
+let html = '<strong>Your schedule for '+fmtDate(date)+':</strong><ul style="margin:6px 0 0;padding-left:18px;">';
+events.forEach(ev=>{
+let timeLabel;
+if(ev.start && ev.start.dateTime){
+timeLabel = new Date(ev.start.dateTime).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+} else { timeLabel = 'All day'; }
+html += '<li>'+timeLabel+' - '+escapeHtml(ev.summary||'(no title)')+'</li>';
+});
+html += '</ul>';
+box.innerHTML = html;
+}).catch(()=>{ box.innerHTML = '<em>Could not load your calendar. Try reconnecting.</em>'; });
+});
+}
+
+function addToGoogleCalendar(){
+const date = document.getElementById('f-start').value || document.getElementById('f-delivery').value;
+if(!date){ alert('Set a start date or due date first, then add this to your calendar.'); return; }
+const time = document.getElementById('f-time').value || '09:00';
+const title = document.getElementById('f-title').value.trim() || 'Untitled activity';
+const desc = document.getElementById('f-description').value;
+const btn = document.getElementById('btn-add-gcal');
+if(btn){ btn.disabled = true; btn.textContent = 'Adding...'; }
+ensureGoogleToken(()=>{
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const startDateTime = date+'T'+time+':00';
+const endDateTime = plusOneHourDateTime(date, time);
+fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+method:'POST',
+headers:{ 'Authorization':'Bearer '+gToken, 'Content-Type':'application/json' },
+body: JSON.stringify({
+summary: title,
+description: desc,
+start: { dateTime: startDateTime, timeZone: tz },
+end: { dateTime: endDateTime, timeZone: tz }
+})
+}).then(r=>r.json()).then(async ev=>{
+if(ev.id){
+window._pendingCalendarEvent = { id: ev.id, link: ev.htmlLink };
+if(editingItemId){
+const { error } = await sb.from('items').update({
+calendar_event_id: ev.id, calendar_link: ev.htmlLink, time: time
+}).eq('id', editingItemId);
+if(!error){
+const item = state.items.find(i=>i.id===editingItemId);
+item.calendarEventId = ev.id;
+item.calendarLink = ev.htmlLink;
+item.time = time;
+window._pendingCalendarEvent = null;
+} else {
+alert('Event was added to Google Calendar but could not be saved on this activity: '+error.message);
+}
+}
+refreshGcalBlock();
+} else {
+alert('Could not add the event: '+((ev.error&&ev.error.message)||'unknown error'));
+if(btn){ btn.disabled=false; btn.textContent='Add to Google Calendar'; }
+}
+}).catch(()=>{
+alert('Network error while adding the event.');
+if(btn){ btn.disabled=false; btn.textContent='Add to Google Calendar'; }
+});
+});
+}
+
+function removeFromCalendar(){
+const existingItem = editingItemId ? state.items.find(i=>i.id===editingItemId) : null;
+const evId = window._pendingCalendarEvent ? window._pendingCalendarEvent.id : (existingItem && existingItem.calendarEventId);
+if(!evId) return;
+if(!confirm('Remove this event from Google Calendar?')) return;
+ensureGoogleToken(()=>{
+fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/'+evId, {
+method:'DELETE', headers:{ 'Authorization':'Bearer '+gToken }
+}).then(async ()=>{
+if(existingItem){
+const { error } = await sb.from('items').update({calendar_event_id:null, calendar_link:null}).eq('id', existingItem.id);
+if(!error){ existingItem.calendarEventId=null; existingItem.calendarLink=null; }
+else alert('Removed from Google Calendar but could not update this activity: '+error.message);
+}
+window._pendingCalendarEvent = null;
+refreshGcalBlock();
+}).catch(()=>alert('Could not remove the event. It may already be gone.'));
+});
+}
+
+function openItemModal(itemId){
+editingItemId = itemId || null;
+window._pendingCalendarEvent = null;
+const item = itemId ? state.items.find(i=>i.id===itemId) : {
+id:null, projectId: selectedProjectId || (state.projects[0] ? state.projects[0].id : ''), title:'', description:'', objective:'',
+leader:'', team:'', time:'', calendarEventId:null, calendarLink:null, estTime:'', start:'', delivery:'', end:'', progress:0, comments:''
+};
+const projectOptions = state.projects.map(p=>'<option value="'+p.id+'" '+(p.id===item.projectId?'selected':'')+'>'+escapeHtml(p.name)+'</option>').join('');
+const progressBtns = [0,25,50,75,100].map(v=>'<button type="button" class="'+(item.progress===v?'active':'')+'" onclick="pickProgress('+v+')" id="prog-'+v+'">'+v+'%</button>').join('');
+
+const modalHtml = `
+<div class="overlay" onclick="if(event.target===this) closeModal()">
+<div class="modal">
+<h2>${itemId ? 'Edit activity' : 'New activity'}</h2>
+<div class="field"><label>Title</label><input type="text" id="f-title" value="${escapeHtml(item.title)}" placeholder="What is this task?"></div>
+<div class="field"><label>Project</label><select id="f-project">${projectOptions}</select></div>
+<div class="field"><label>What needs to happen (description)</label><textarea id="f-description">${escapeHtml(item.description)}</textarea></div>
+<div class="field"><label>Why it matters (objective)</label><textarea id="f-objective">${escapeHtml(item.objective)}</textarea></div>
+<div class="row2">
+<div class="field"><label>Leader</label><input type="text" id="f-leader" value="${escapeHtml(item.leader)}"></div>
+<div class="field"><label>Team members</label><input type="text" id="f-team" value="${escapeHtml(item.team)}"></div>
+</div>
+<div class="row2">
+<div class="field"><label>Start date</label><input type="date" id="f-start" value="${item.start||''}"></div>
+<div class="field"><label>Due date</label><input type="date" id="f-delivery" value="${item.delivery||''}"></div>
+</div>
+<div class="row2">
+<div class="field"><label>End date (actual)</label><input type="date" id="f-end" value="${item.end||''}"></div>
+<div class="field"><label>Est. time</label><input type="text" id="f-est" value="${escapeHtml(item.estTime)}" placeholder="e.g. 5 hrs"></div>
+</div>
+${gcalSectionHtml(item)}
+<div class="field"><label>Progress</label><div class="progress-pick">${progressBtns}</div></div>
+<div class="field"><label>Comments</label><textarea id="f-comments">${escapeHtml(item.comments)}</textarea></div>
+<div class="modal-actions">
+<div>${itemId ? '<button class="danger" onclick="deleteItem()">Delete</button>' : ''}</div>
+<div class="right">
+<button onclick="closeModal()">Cancel</button>
+<button class="primary" id="item-save-btn" onclick="saveItem()">Save</button>
+</div>
+</div>
+</div>
+</div>`;
+document.body.insertAdjacentHTML('beforeend', modalHtml);
+window._currentProgress = item.progress;
+}
+
+function pickProgress(v){
+window._currentProgress = v;
+[0,25,50,75,100].forEach(n=>{
+document.getElementById('prog-'+n).classList.toggle('active', n===v);
+});
+}
+
+async function saveItem(){
+const btn = document.getElementById('item-save-btn');
+if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+const existingItem = editingItemId ? state.items.find(i=>i.id===editingItemId) : null;
+const calendarEventId = window._pendingCalendarEvent ? window._pendingCalendarEvent.id : (existingItem ? existingItem.calendarEventId : null);
+const calendarLink = window._pendingCalendarEvent ? window._pendingCalendarEvent.link : (existingItem ? existingItem.calendarLink : null);
+const data = {
+projectId: document.getElementById('f-project').value,
+title: document.getElementById('f-title').value.trim() || 'Untitled activity',
+description: document.getElementById('f-description').value,
+objective: document.getElementById('f-objective').value,
+leader: document.getElementById('f-leader').value,
+team: document.getElementById('f-team').value,
+start: document.getElementById('f-start').value,
+delivery: document.getElementById('f-delivery').value,
+end: document.getElementById('f-end').value,
+estTime: document.getElementById('f-est').value,
+time: document.getElementById('f-time').value,
+calendarEventId: calendarEventId || null,
+calendarLink: calendarLink || null,
+progress: window._currentProgress || 0,
+comments: document.getElementById('f-comments').value
+};
+const dbRow = itemToDbRow(data);
+try{
+if(editingItemId){
+const { data: updated, error } = await sb.from('items').update(dbRow).eq('id', editingItemId).select().single();
+if(error) throw error;
+const item = state.items.find(i=>i.id===editingItemId);
+Object.assign(item, mapItemFromDb(updated));
+} else {
+const { data: inserted, error } = await sb.from('items').insert(dbRow).select().single();
+if(error) throw error;
+state.items.push(mapItemFromDb(inserted));
+}
+window._pendingCalendarEvent = null;
+closeModal();
+render();
+}catch(e){
+alert('Could not save this activity: '+e.message);
+if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+}
+}
+
+async function deleteItem(){
+if(!confirm('Delete this activity? This cannot be undone.')) return;
+const id = editingItemId;
+const { error } = await sb.from('items').delete().eq('id', id);
+if(error){ alert('Could not delete: '+error.message); return; }
+state.items = state.items.filter(i=>i.id!==id);
+closeModal();
+render();
+}
+
+function openProjectModal(projectId){
+editingProjectId = projectId || null;
+const proj = projectId ? projectById(projectId) : {name:'', objective:'', leader:'', team:'', start:'', delivery:''};
+const modalHtml = `
+<div class="overlay" onclick="if(event.target===this) closeModal()">
+<div class="modal">
+<h2>${projectId ? 'Edit project' : 'New project'}</h2>
+<div class="field"><label>Project name</label><input type="text" id="p-name" value="${escapeHtml(proj.name)}"></div>
+<div class="field"><label>Goal (objective)</label><textarea id="p-objective">${escapeHtml(proj.objective)}</textarea></div>
+<div class="row2">
+<div class="field"><label>Leader</label><input type="text" id="p-leader" value="${escapeHtml(proj.leader)}"></div>
+<div class="field"><label>Team members</label><input type="text" id="p-team" value="${escapeHtml(proj.team)}"></div>
+</div>
+<div class="row2">
+<div class="field"><label>Start date</label><input type="date" id="p-start" value="${proj.start||''}"></div>
+<div class="field"><label>Target delivery</label><input type="date" id="p-delivery" value="${proj.delivery||''}"></div>
+</div>
+<div class="modal-actions">
+<div>${projectId ? '<button class="danger" onclick="deleteProject()">Delete project</button>' : ''}</div>
+<div class="right">
+<button onclick="closeModal()">Cancel</button>
+<button class="primary" id="project-save-btn" onclick="saveProject()">Save</button>
+</div>
+</div>
+</div>
+</div>`;
+document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function saveProject(){
+const btn = document.getElementById('project-save-btn');
+if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+const data = {
+name: document.getElementById('p-name').value.trim() || 'Untitled project',
+objective: document.getElementById('p-objective').value,
+leader: document.getElementById('p-leader').value,
+team: document.getElementById('p-team').value,
+start: document.getElementById('p-start').value,
+delivery: document.getElementById('p-delivery').value
+};
+try{
+if(editingProjectId){
+const dbRow = projectToDbRow(data);
+const { data: updated, error } = await sb.from('projects').update(dbRow).eq('id', editingProjectId).select().single();
+if(error) throw error;
+Object.assign(projectById(editingProjectId), mapProjectFromDb(updated));
+} else {
+const dbRow = projectToDbRow(data);
+dbRow.color = PALETTE[state.projects.length % PALETTE.length];
+const { data: inserted, error } = await sb.from('projects').insert(dbRow).select().single();
+if(error) throw error;
+state.projects.push(mapProjectFromDb(inserted));
+}
+closeModal();
+render();
+}catch(e){
+alert('Could not save this project: '+e.message);
+if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+}
+}
+
+async function deleteProject(){
+if(!confirm('Delete this project and all of its activities? This cannot be undone.')) return;
+const id = editingProjectId;
+const { error } = await sb.from('projects').delete().eq('id', id);
+if(error){ alert('Could not delete project: '+error.message); return; }
+state.projects = state.projects.filter(p=>p.id!==id);
+state.items = state.items.filter(i=>i.projectId!==id);
+if(selectedProjectId===id){ selectedProjectId=null; currentView='dashboard'; }
+closeModal();
+render();
+}
+
+function closeModal(){
+document.querySelectorAll('.overlay').forEach(el=>el.remove());
+editingItemId = null;
+editingProjectId = null;
+}
+
+function exportCsv(){
+const rows = [['Project','Type','Title','Description','Objective','Leader','Team','Calendar','Est Time','Start','Delivery','End','Progress %','Comments']];
+state.items.forEach(item=>{
+const proj = projectById(item.projectId);
+rows.push([
+proj ? proj.name : '', 'Activity', item.title, item.description, item.objective, item.leader,
+item.team, item.calendarEventId ? 'YES' : '', item.estTime, item.start, item.delivery, item.end,
+item.progress, item.comments
+]);
+});
+const csv = rows.map(r=>r.map(v=>{
+const s = String(v==null?'':v);
+return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}).join(',')).join('\n');
+const blob = new Blob([csv], {type:'text/csv'});
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'project_registry_export.csv';
+document.body.appendChild(a);
+a.click();
+a.remove();
+URL.revokeObjectURL(url);
+}
+
+if(location.protocol === 'file:'){
+document.getElementById('app').innerHTML = `
+<div class="setup-card">
+<h2 style="margin-top:0;">One-time setup</h2>
+<p style="color:var(--text-soft);font-size:14px;">This app needs to run from a real web address (not opened as a file) so sign-in and your data work correctly.</p>
+<pre>1. Open a terminal in this file's folder
+2. Run: python3 -m http.server 8000
+3. Open http://localhost:8000 in your browser</pre>
+</div>`;
+} else {
+init();
+}
+</script>
+</body>
+</html>
